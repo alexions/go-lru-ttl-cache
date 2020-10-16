@@ -28,12 +28,14 @@ func NewLRUCache(config *ConfigBuilder) *LRUCache {
 
 	// Package agreement: there is no way to stop this goroutine. Reuse cache if possible.
 	// Avoid multiple create/delete cycles
-	go func() {
-		for {
-			<-time.After(config.cleanInterval)
-			cache.cleanInterval()
-		}
-	}()
+	if config.defaultTTL >= 0 {
+		go func() {
+			for {
+				<-time.After(config.cleanInterval)
+				cache.cleanInterval()
+			}
+		}()
+	}
 
 	return cache
 }
