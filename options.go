@@ -7,14 +7,14 @@ import (
 
 type ConfigBuilder struct {
 	defaultTTL    time.Duration
-	maxSize       uint32
+	maxSize       int
 	cleanInterval time.Duration
 }
 
 func Configuration() *ConfigBuilder {
 	return &ConfigBuilder{
 		defaultTTL:    -1,
-		maxSize:       math.MaxUint32 - 1,
+		maxSize:       math.MaxInt32 - 1,
 		cleanInterval: time.Minute,
 	}
 }
@@ -24,7 +24,7 @@ func (b *ConfigBuilder) SetDefaultTTL(ttl time.Duration) *ConfigBuilder {
 	return b
 }
 
-func (b *ConfigBuilder) SetMaxSize(size uint32) *ConfigBuilder {
+func (b *ConfigBuilder) SetMaxSize(size int) *ConfigBuilder {
 	b.maxSize = size
 	return b
 }

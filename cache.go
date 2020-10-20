@@ -1,17 +1,16 @@
 package go_lru_ttl_cache
 
 import (
+	"container/list"
 	"sync"
 	"time"
 )
 
 type LRUCache struct {
 	values map[string]*cacheValue
-	head   *lruQueueItem
-	tail   *lruQueueItem
-	size   uint32
+	queue  *list.List
 
-	maxSize    uint32
+	maxSize    int
 	defaultTTL time.Duration
 
 	sync.RWMutex
@@ -20,6 +19,7 @@ type LRUCache struct {
 func NewLRUCache(config *ConfigBuilder) *LRUCache {
 	cache := &LRUCache{
 		values: make(map[string]*cacheValue),
+		queue:  list.New(),
 
 		// Configuration
 		maxSize:    config.maxSize,
@@ -48,7 +48,9 @@ func (c *LRUCache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 
-	c.moveToTop(value.link)
+	c.Lock()
+	c.queue.MoveToFront(value.link)
+	c.Unlock()
 
 	return value.data, true
 }
@@ -60,20 +62,25 @@ func (c *LRUCache) Set(key string, value interface{}) {
 		c.values[key].data = value
 		c.Unlock()
 	} else {
-		item := &lruQueueItem{
+		LRUitem := &lruQueueItem{
 			key: key,
 			ttl: time.Duration(time.Now().Unix()) + c.defaultTTL,
-
-			next: c.head,
 		}
 
 		c.Lock()
-		c.head = item
+		queueItem := c.queue.PushFront(LRUitem)
 		c.values[key] = &cacheValue{
 			data: value,
-			link: item,
+			link: queueItem,
 		}
 		c.Unlock()
+
+		if c.queue.Len() > c.maxSize {
+			c.RLock()
+			item := c.queue.Back().Value.(*lruQueueItem)
+			c.RUnlock()
+			c.Delete(item.key)
+		}
 	}
 }
 
@@ -94,8 +101,7 @@ func (c *LRUCache) Clean() {
 	// TODO: Check if GOCG cleans the dropped values and do not do a memory leaking
 	c.Lock()
 	c.values = make(map[string]*cacheValue)
-	c.head = nil
-	c.tail = nil
+	c.queue = list.New()
 	c.Unlock()
 }
 
@@ -104,7 +110,8 @@ func (c *LRUCache) cleanInterval() {
 	c.Lock()
 	now := time.Duration(time.Now().Unix())
 	for key, value := range c.values {
-		if value.link.ttl < now {
+		item := value.link.Value.(*lruQueueItem)
+		if item.ttl < now {
 			c.unsafeDelete(key, value)
 		}
 	}
@@ -112,36 +119,6 @@ func (c *LRUCache) cleanInterval() {
 }
 
 func (c *LRUCache) unsafeDelete(key string, value *cacheValue) {
-	if value.link.prev != nil {
-		value.link.prev = value.link.next
-	}
-	if value.link.next != nil {
-		value.link.next = value.link.prev
-	}
-
-	if c.head == value.link {
-		c.head = value.link.next
-	}
-	if c.tail == value.link {
-		c.tail = value.link.prev
-	}
-
-	value.link = nil
+	c.queue.Remove(value.link)
 	delete(c.values, key)
-}
-
-func (c *LRUCache) moveToTop(item *lruQueueItem) {
-	c.Lock()
-	if item.prev != nil {
-		item.prev.next = item.next
-	}
-	if item.next != nil {
-		item.next.prev = item.prev
-	}
-
-	item.next = c.head
-	c.head = item
-
-	item.ttl = time.Duration(time.Now().Unix()) + c.defaultTTL
-	c.Unlock()
 }
