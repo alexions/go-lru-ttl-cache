@@ -105,6 +105,10 @@ func (c *LRUCache) Clean() {
 	c.Unlock()
 }
 
+func (c *LRUCache) Size() int {
+	return c.queue.Len()
+}
+
 // Cleans up the expired items. Do not set the clean interval too low to avoid CPU load
 func (c *LRUCache) cleanInterval() {
 	c.Lock()
