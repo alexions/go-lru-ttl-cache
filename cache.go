@@ -56,31 +56,34 @@ func (c *LRUCache) Get(key string) (interface{}, bool) {
 }
 
 func (c *LRUCache) Set(key string, value interface{}) {
-	_, found := c.Get(key)
+	c.Lock()
+	_, found := c.values[key]
 	if found {
-		c.Lock()
 		c.values[key].data = value
+		c.queue.MoveToFront(c.values[key].link)
 		c.Unlock()
-	} else {
-		LRUitem := &lruQueueItem{
-			key: key,
-			ttl: time.Duration(time.Now().Unix()) + c.defaultTTL,
-		}
+		return
+	}
+	c.Unlock()
 
+	LRUitem := &lruQueueItem{
+		key: key,
+		ttl: time.Duration(time.Now().Unix()) + c.defaultTTL,
+	}
+	c.Lock()
+	queueItem := c.queue.PushFront(LRUitem)
+	c.values[key] = &cacheValue{
+		data: value,
+		link: queueItem,
+	}
+	c.Unlock()
+
+	if c.queue.Len() > c.maxSize {
 		c.Lock()
-		queueItem := c.queue.PushFront(LRUitem)
-		c.values[key] = &cacheValue{
-			data: value,
-			link: queueItem,
-		}
+		item := c.queue.Back().Value.(*lruQueueItem)
+		cachedItem := c.values[item.key]
+		c.unsafeDelete(item.key, cachedItem)
 		c.Unlock()
-
-		if c.queue.Len() > c.maxSize {
-			c.RLock()
-			item := c.queue.Back().Value.(*lruQueueItem)
-			c.RUnlock()
-			c.Delete(item.key)
-		}
 	}
 }
 
@@ -94,7 +97,6 @@ func (c *LRUCache) Delete(key string) {
 		c.unsafeDelete(key, value)
 		c.Unlock()
 	}
-
 }
 
 func (c *LRUCache) Clean() {
@@ -112,10 +114,10 @@ func (c *LRUCache) Size() int {
 // Cleans up the expired items. Do not set the clean interval too low to avoid CPU load
 func (c *LRUCache) cleanInterval() {
 	c.Lock()
-	now := time.Duration(time.Now().Unix())
+	now := time.Now().UnixNano() / int64(time.Millisecond)
 	for key, value := range c.values {
 		item := value.link.Value.(*lruQueueItem)
-		if item.ttl < now {
+		if item.ttl.Milliseconds() < now {
 			c.unsafeDelete(key, value)
 		}
 	}
@@ -125,4 +127,5 @@ func (c *LRUCache) cleanInterval() {
 func (c *LRUCache) unsafeDelete(key string, value *cacheValue) {
 	c.queue.Remove(value.link)
 	delete(c.values, key)
+	value = nil
 }
