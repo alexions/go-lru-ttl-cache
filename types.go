@@ -12,5 +12,5 @@ type cacheValue struct {
 
 type lruQueueItem struct {
 	key string
-	ttl time.Duration
+	ttl time.Time
 }

@@ -10,8 +10,9 @@ type LRUCache struct {
 	values map[string]*cacheValue
 	queue  *list.List
 
-	maxSize    int
-	defaultTTL time.Duration
+	maxSize        int
+	defaultTTL     time.Duration
+	deleteCallback func(count int64)
 
 	lock sync.RWMutex
 }
@@ -22,8 +23,9 @@ func NewLRUCache(config *ConfigBuilder) *LRUCache {
 		queue:  list.New(),
 
 		// Configuration
-		maxSize:    config.maxSize,
-		defaultTTL: config.defaultTTL,
+		maxSize:        config.maxSize,
+		defaultTTL:     config.defaultTTL,
+		deleteCallback: config.deleteCallback,
 	}
 
 	// Package agreement: there is no way to stop this goroutine. Reuse cache if possible.
@@ -68,7 +70,7 @@ func (c *LRUCache) Set(key string, value interface{}) {
 
 	LRUitem := &lruQueueItem{
 		key: key,
-		ttl: time.Duration(time.Now().Unix()) + c.defaultTTL,
+		ttl: time.Now().Add(c.defaultTTL),
 	}
 	c.lock.Lock()
 	queueItem := c.queue.PushFront(LRUitem)
@@ -96,6 +98,9 @@ func (c *LRUCache) Delete(key string) {
 		c.lock.Lock()
 		c.unsafeDelete(key, value)
 		c.lock.Unlock()
+		if c.deleteCallback != nil {
+			c.deleteCallback(1)
+		}
 	}
 }
 
@@ -113,15 +118,20 @@ func (c *LRUCache) Size() int {
 
 // Cleans up the expired items. Do not set the clean interval too low to avoid CPU load
 func (c *LRUCache) cleanInterval() {
+	var deleted int64
 	c.lock.Lock()
-	now := time.Now().UnixNano() / int64(time.Millisecond)
 	for key, value := range c.values {
 		item := value.link.Value.(*lruQueueItem)
-		if item.ttl.Milliseconds() < now {
+		if item.ttl.Sub(time.Now()) < 0 {
 			c.unsafeDelete(key, value)
+			deleted++
 		}
 	}
 	c.lock.Unlock()
+
+	if c.deleteCallback != nil {
+		c.deleteCallback(deleted)
+	}
 }
 
 func (c *LRUCache) unsafeDelete(key string, value *cacheValue) {

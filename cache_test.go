@@ -123,3 +123,31 @@ func TestLRUCache_LRUMoveSet(t *testing.T) {
 		t.Fatal("item must not be removed but was or item has a wrong value")
 	}
 }
+
+func TestLRUCache_DeleteCallbackL(t *testing.T) {
+	expectation := []int64{1, 0, 2}
+	callback := func(count int64) {
+		if count != expectation[0] {
+			t.Fatal("wrong deleted count")
+		}
+		expectation = expectation[1:]
+
+	}
+	config := Configuration().
+		SetCleanupInterval(10 * time.Millisecond).
+		SetDefaultTTL(15 * time.Millisecond).
+		SetDeleteCallback(callback)
+	cache := NewLRUCache(config)
+
+	cache.Set("hello", 1)
+	cache.Delete("hello")
+
+	cache.Set("to_be_removed", 1)
+	cache.Set("to_be_removed2", 2)
+
+	<-time.After(25 * time.Millisecond)
+
+	if len(expectation) != 0 {
+		t.Fatal("not all callbacks have been called")
+	}
+}
