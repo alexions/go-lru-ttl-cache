@@ -13,7 +13,7 @@ type LRUCache struct {
 	maxSize    int
 	defaultTTL time.Duration
 
-	sync.RWMutex
+	lock sync.RWMutex
 }
 
 func NewLRUCache(config *ConfigBuilder) *LRUCache {
@@ -41,70 +41,70 @@ func NewLRUCache(config *ConfigBuilder) *LRUCache {
 }
 
 func (c *LRUCache) Get(key string) (interface{}, bool) {
-	c.RLock()
+	c.lock.RLock()
 	value, found := c.values[key]
-	c.RUnlock()
+	c.lock.RUnlock()
 	if !found {
 		return nil, false
 	}
 
-	c.Lock()
+	c.lock.Lock()
 	c.queue.MoveToFront(value.link)
-	c.Unlock()
+	c.lock.Unlock()
 
 	return value.data, true
 }
 
 func (c *LRUCache) Set(key string, value interface{}) {
-	c.Lock()
+	c.lock.Lock()
 	_, found := c.values[key]
 	if found {
 		c.values[key].data = value
 		c.queue.MoveToFront(c.values[key].link)
-		c.Unlock()
+		c.lock.Unlock()
 		return
 	}
-	c.Unlock()
+	c.lock.Unlock()
 
 	LRUitem := &lruQueueItem{
 		key: key,
 		ttl: time.Duration(time.Now().Unix()) + c.defaultTTL,
 	}
-	c.Lock()
+	c.lock.Lock()
 	queueItem := c.queue.PushFront(LRUitem)
 	c.values[key] = &cacheValue{
 		data: value,
 		link: queueItem,
 	}
-	c.Unlock()
+	c.lock.Unlock()
 
 	if c.queue.Len() > c.maxSize {
-		c.Lock()
+		c.lock.Lock()
 		item := c.queue.Back().Value.(*lruQueueItem)
 		cachedItem := c.values[item.key]
 		c.unsafeDelete(item.key, cachedItem)
-		c.Unlock()
+		c.lock.Unlock()
 	}
 }
 
 func (c *LRUCache) Delete(key string) {
-	c.RLock()
+	c.lock.RLock()
 	value, found := c.values[key]
-	c.RUnlock()
+	c.lock.RUnlock()
 
 	if found {
-		c.Lock()
+		c.lock.Lock()
 		c.unsafeDelete(key, value)
-		c.Unlock()
+		c.lock.Unlock()
 	}
 }
 
 func (c *LRUCache) Clean() {
 	// TODO: Check if GOCG cleans the dropped values and do not do a memory leaking
-	c.Lock()
+	c.lock.Lock()
 	c.values = make(map[string]*cacheValue)
 	c.queue = list.New()
-	c.Unlock()
+	c.lock.Unlock()
 }
 
 func (c *LRUCache) Size() int {
@@ -113,7 +113,7 @@ func (c *LRUCache) Size() int {
 
 // Cleans up the expired items. Do not set the clean interval too low to avoid CPU load
 func (c *LRUCache) cleanInterval() {
-	c.Lock()
+	c.lock.Lock()
 	now := time.Now().UnixNano() / int64(time.Millisecond)
 	for key, value := range c.values {
 		item := value.link.Value.(*lruQueueItem)
@@ -121,7 +121,7 @@ func (c *LRUCache) cleanInterval() {
 			c.unsafeDelete(key, value)
 		}
 	}
-	c.Unlock()
+	c.lock.Unlock()
 }
 
 func (c *LRUCache) unsafeDelete(key string, value *cacheValue) {
