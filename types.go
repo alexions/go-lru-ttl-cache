@@ -11,6 +11,6 @@ type cacheValue struct {
 }
 
 type lruQueueItem struct {
-	key string
+	key interface{}
 	ttl time.Time
 }

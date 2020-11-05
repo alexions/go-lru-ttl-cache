@@ -7,7 +7,7 @@ import (
 )
 
 type LRUCache struct {
-	values map[string]*cacheValue
+	values map[interface{}]*cacheValue
 	queue  *list.List
 
 	maxSize        int
@@ -19,7 +19,7 @@ type LRUCache struct {
 
 func NewLRUCache(config *ConfigBuilder) *LRUCache {
 	cache := &LRUCache{
-		values: make(map[string]*cacheValue),
+		values: make(map[interface{}]*cacheValue),
 		queue:  list.New(),
 
 		// Configuration
@@ -42,7 +42,7 @@ func NewLRUCache(config *ConfigBuilder) *LRUCache {
 	return cache
 }
 
-func (c *LRUCache) Get(key string) (interface{}, bool) {
+func (c *LRUCache) Get(key interface{}) (interface{}, bool) {
 	c.lock.RLock()
 	value, found := c.values[key]
 	c.lock.RUnlock()
@@ -57,7 +57,7 @@ func (c *LRUCache) Get(key string) (interface{}, bool) {
 	return value.data, true
 }
 
-func (c *LRUCache) Set(key string, value interface{}) {
+func (c *LRUCache) Set(key interface{}, value interface{}) {
 	c.lock.Lock()
 	_, found := c.values[key]
 	if found {
@@ -89,7 +89,7 @@ func (c *LRUCache) Set(key string, value interface{}) {
 	}
 }
 
-func (c *LRUCache) Delete(key string) {
+func (c *LRUCache) Delete(key interface{}) {
 	c.lock.RLock()
 	value, found := c.values[key]
 	c.lock.RUnlock()
@@ -107,7 +107,7 @@ func (c *LRUCache) Delete(key string) {
 func (c *LRUCache) Clean() {
 	// TODO: Check if GOCG cleans the dropped values and do not do a memory leaking
 	c.lock.Lock()
-	c.values = make(map[string]*cacheValue)
+	c.values = make(map[interface{}]*cacheValue)
 	c.queue = list.New()
 	c.lock.Unlock()
 }
@@ -134,7 +134,7 @@ func (c *LRUCache) cleanInterval() {
 	}
 }
 
-func (c *LRUCache) unsafeDelete(key string, value *cacheValue) {
+func (c *LRUCache) unsafeDelete(key interface{}, value *cacheValue) {
 	c.queue.Remove(value.link)
 	delete(c.values, key)
 	value = nil
