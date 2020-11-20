@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/alexions/go-lru-ttl-cache.svg?branch=main)](https://travis-ci.com/alexions/go-lru-ttl-cache)
+
 # LRU Cache with TTL support for Golang
 
 LRUCache is an LRU cache written in Go. The cache supports TTL background 
