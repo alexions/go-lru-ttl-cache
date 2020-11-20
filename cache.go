@@ -78,15 +78,12 @@ func (c *LRUCache) Set(key interface{}, value interface{}) {
 		data: value,
 		link: queueItem,
 	}
-	c.lock.Unlock()
-
 	if c.queue.Len() > c.maxSize {
-		c.lock.Lock()
 		item := c.queue.Back().Value.(*lruQueueItem)
 		cachedItem := c.values[item.key]
 		c.unsafeDelete(item.key, cachedItem)
-		c.lock.Unlock()
 	}
+	c.lock.Unlock()
 }
 
 func (c *LRUCache) Delete(key interface{}) {
@@ -113,6 +110,8 @@ func (c *LRUCache) Clean() {
 }
 
 func (c *LRUCache) Size() int {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	return c.queue.Len()
 }
 

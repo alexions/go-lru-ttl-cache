@@ -1,6 +1,7 @@
 package go_lru_ttl_cache
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -126,11 +127,14 @@ func TestLRUCache_LRUMoveSet(t *testing.T) {
 
 func TestLRUCache_DeleteCallbackL(t *testing.T) {
 	expectation := []int64{1, 0, 2}
+	var l sync.Mutex
 	callback := func(count int64) {
 		if count != expectation[0] {
 			t.Fatal("wrong deleted count")
 		}
+		l.Lock()
 		expectation = expectation[1:]
+		l.Unlock()
 
 	}
 	config := Configuration().
@@ -147,6 +151,8 @@ func TestLRUCache_DeleteCallbackL(t *testing.T) {
 
 	<-time.After(25 * time.Millisecond)
 
+	l.Lock()
+	defer l.Unlock()
 	if len(expectation) != 0 {
 		t.Fatal("not all callbacks have been called")
 	}
