@@ -129,10 +129,10 @@ func TestLRUCache_DeleteCallbackL(t *testing.T) {
 	expectation := []int64{1, 0, 2}
 	var l sync.Mutex
 	callback := func(count int64) {
+		l.Lock()
 		if count != expectation[0] {
 			t.Fatal("wrong deleted count")
 		}
-		l.Lock()
 		expectation = expectation[1:]
 		l.Unlock()
 
