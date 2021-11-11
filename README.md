@@ -90,6 +90,28 @@ if _, found := cache.Get("my_item"); !found {
 }
 ```
 
+## TTL Usage
+
+```
+config := Configuration().
+	SetCleanupInterval(10 * time.Millisecond).
+	SetDefaultTTL(25)
+
+cache := NewLRUCache(config)
+
+cache.Set("remove_by_ttl", 1)
+cache.Set("keep_by_ttl", 2)
+
+<-time.After(15 * time.Millisecond)
+_, ok := cache.Get("remove_by_ttl") // ok is false, not found
+_, ok = cache.Get("keep_by_ttl") // ok is true, found
+fmt.Println(ok)
+
+<-time.After(15 * time.Millisecond)
+fmt.Println(cache.Size()) // will be 0
+```
+
+
 ## Size
 
 ```
